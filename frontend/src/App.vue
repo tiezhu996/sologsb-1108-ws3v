@@ -5,6 +5,7 @@ import { useDeveloperStore } from './stores/developerStore'
 import { useFilmStore } from './stores/filmStore'
 import { useRecipeStore } from './stores/recipeStore'
 import { useRunStore } from './stores/runStore'
+import { useMachineStore } from './stores/machineStore'
 import { downloadJson } from './utils/export'
 
 const route = useRoute()
@@ -12,13 +13,15 @@ const filmStore = useFilmStore()
 const developerStore = useDeveloperStore()
 const recipeStore = useRecipeStore()
 const runStore = useRunStore()
+const machineStore = useMachineStore()
 
 const navItems = [
   { path: '/', label: '参数速查' },
   { path: '/films', label: '胶片台账' },
   { path: '/developers', label: '显影液' },
   { path: '/recipes', label: '配方表' },
-  { path: '/runs', label: '冲洗记录' }
+  { path: '/runs', label: '冲洗记录' },
+  { path: '/inbox', label: '回传对账' }
 ]
 
 function isActive(path: string): boolean {
@@ -28,11 +31,14 @@ function isActive(path: string): boolean {
 function exportAll(): void {
   downloadJson(`gbfilmdev-backup-${new Date().toISOString().slice(0, 10)}.json`, {
     exportedAt: new Date().toISOString(),
-    schemaRev: 2,
+    schemaRev: 3,
     films: filmStore.films,
     developers: developerStore.developers,
     recipes: recipeStore.recipes,
-    runs: runStore.runs
+    runs: runStore.runs,
+    readings: machineStore.readings,
+    baselineConflicts: machineStore.conflicts,
+    corrections: machineStore.corrections
   })
 }
 
@@ -41,7 +47,8 @@ onMounted(async () => {
     filmStore.load(),
     developerStore.load(),
     recipeStore.load(),
-    runStore.load()
+    runStore.load(),
+    machineStore.load()
   ])
 })
 </script>

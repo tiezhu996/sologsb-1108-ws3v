@@ -6,10 +6,12 @@ import EmptyPanel from '../components/common/EmptyPanel.vue'
 import FilterBar from '../components/common/FilterBar.vue'
 import PushPullTag from '../components/common/PushPullTag.vue'
 import { useTempCompensate } from '../hooks/useTempCompensate'
+import { suggestMinutesAtTemp } from '../utils/advice'
 import { useDeveloperStore } from '../stores/developerStore'
 import { useFilmStore } from '../stores/filmStore'
 import { useRecipeStore } from '../stores/recipeStore'
 import { useRunStore } from '../stores/runStore'
+import { useMachineStore } from '../stores/machineStore'
 import type { TankType } from '../types/dev-run'
 
 interface FilterValue {
@@ -20,11 +22,13 @@ interface FilterValue {
 interface RunForm {
   batchNo: string
   recipeId: number
+  developerId: number | null
   actualTempC: number
   actualMinutes: number
   tankType: TankType
   runDate: string
   result: string
+  applyCorrectionId: number | null
 }
 
 const route = useRoute()
@@ -32,6 +36,7 @@ const filmStore = useFilmStore()
 const developerStore = useDeveloperStore()
 const recipeStore = useRecipeStore()
 const runStore = useRunStore()
+const machineStore = useMachineStore()
 const showForm = ref(false)
 const saving = ref(false)
 const today = new Date().toISOString().slice(0, 10)
@@ -52,11 +57,13 @@ const filterValue = ref<FilterValue>({
 const form = reactive<RunForm>({
   batchNo: `R-${today.replace(/-/g, '')}-01`,
   recipeId: 1,
+  developerId: null,
   actualTempC: 20,
   actualMinutes: 8,
   tankType: '双联罐',
   runDate: today,
-  result: '密度均匀，中间调细腻'
+  result: '密度均匀，中间调细腻',
+  applyCorrectionId: null
 })
 
 const selectedRecipe = computed(() => recipeStore.recipes.find((recipe) => recipe.id === form.recipeId))
@@ -68,11 +75,36 @@ const suggestion = computed(() => {
   return suggest(recipe.devMinutes, form.actualTempC)
 })
 
+const recipeDeveloperId = computed(() => selectedRecipe.value?.developerId ?? null)
+const blockedBatchNos = computed(() => new Set(machineStore.blockedBatchNos))
+const selectedDeveloper = computed(() =>
+  developerStore.developers.find((item) => item.id === (form.developerId ?? recipeDeveloperId.value))
+)
+const batchBlocked = computed(() =>
+  selectedDeveloper.value ? blockedBatchNos.value.has(selectedDeveloper.value.batchNo) : false
+)
+/** 针对所选工作液+配方、由本机按活性重算且仍生效的修正建议 */
+const pendingCorrection = computed(() =>
+  machineStore.pendingCorrectionFor(form.developerId ?? recipeDeveloperId.value, form.recipeId)
+)
+const correctionMinutes = computed(() => {
+  const correction = pendingCorrection.value
+  if (!correction) return null
+  return suggestMinutesAtTemp(correction.basis, form.actualTempC)
+})
+
 watch(selectedRecipe, (recipe) => {
   if (!recipe) return
   form.actualTempC = recipe.tempC
   form.actualMinutes = recipe.devMinutes
+  form.developerId = recipe.developerId
+  form.applyCorrectionId = null
 }, { immediate: true })
+
+watch([pendingCorrection, () => form.actualTempC], () => {
+  if (!form.applyCorrectionId) return
+  if (correctionMinutes.value !== null) form.actualMinutes = correctionMinutes.value
+})
 
 const filteredRuns = computed(() => {
   const keyword = filterValue.value.keyword.trim().toLowerCase()
@@ -103,7 +135,14 @@ function recipeForRun(id: number) {
 
 function applySuggestion(): void {
   if (!suggestion.value) return
+  form.applyCorrectionId = null
   form.actualMinutes = suggestion.value.minutes
+}
+
+function applyCorrection(): void {
+  if (correctionMinutes.value === null || !pendingCorrection.value) return
+  form.applyCorrectionId = pendingCorrection.value.id ?? null
+  form.actualMinutes = correctionMinutes.value
 }
 
 async function submitRun(): Promise<void> {
@@ -111,22 +150,29 @@ async function submitRun(): Promise<void> {
     ElMessage.warning('请填写批次号、配方与结果评价')
     return
   }
+  const effectiveDeveloperId = form.developerId ?? recipeDeveloperId.value
+  if (batchBlocked.value) {
+    ElMessage.warning('该工作液批号的配方基准尚待人工选定，本批不使用活性修正建议（仍可手工录入实冲）')
+    form.applyCorrectionId = null
+  }
   saving.value = true
-  const selectedDeveloper = developerStore.developers.find((item) => item.id === selectedRecipe.value?.developerId)
-  const willExceedLimit = selectedDeveloper !== undefined
-    && selectedDeveloper.state !== '报废'
-    && selectedDeveloper.usedRolls + 1 > selectedDeveloper.maxRolls
+  const selectedDev = developerStore.developers.find((item) => item.id === effectiveDeveloperId)
+  const willExceedLimit = selectedDev !== undefined
+    && selectedDev.state !== '报废'
+    && selectedDev.usedRolls + 1 > selectedDev.maxRolls
   try {
     await runStore.addRun({
       batchNo: form.batchNo.trim(),
       recipeId: Number(form.recipeId),
+      developerId: effectiveDeveloperId,
       actualTempC: Number(form.actualTempC),
       actualMinutes: Number(form.actualMinutes),
       tankType: form.tankType,
       runDate: form.runDate,
-      result: form.result.trim()
+      result: form.result.trim(),
+      applyCorrectionId: form.applyCorrectionId
     })
-    await Promise.all([developerStore.load(), recipeStore.load()])
+    await Promise.all([developerStore.load(), recipeStore.load(), machineStore.load()])
     if (willExceedLimit) {
       ElMessage.warning('冲洗记录已保存，本次已超过显影液标称可冲上限，请评估后标记报废')
     } else {
@@ -134,6 +180,7 @@ async function submitRun(): Promise<void> {
     }
     form.batchNo = `R-${today.replace(/-/g, '')}-${String(runStore.runs.length + 1).padStart(2, '0')}`
     form.result = ''
+    form.applyCorrectionId = null
     showForm.value = false
   } finally {
     saving.value = false
@@ -148,7 +195,13 @@ async function writeBack(recipeId?: number, runId?: number): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([filmStore.load(), developerStore.load(), recipeStore.load(), runStore.load()])
+  await Promise.all([
+    filmStore.load(),
+    developerStore.load(),
+    recipeStore.load(),
+    runStore.load(),
+    machineStore.load()
+  ])
   if (recipeStore.recipes[0]?.id !== undefined) {
     form.recipeId = recipeStore.recipes[0].id
   }
@@ -209,16 +262,45 @@ onMounted(async () => {
           <input v-model="form.runDate" data-testid="field-runDate" type="date" />
         </label>
         <label class="span-2">
+          <span>使用工作液</span>
+          <select v-model.number="form.developerId" data-testid="field-developerId">
+            <option v-for="developer in developerStore.developers" :key="developer.id" :value="developer.id">
+              {{ developer.name }} · {{ developer.batchNo }}
+            </option>
+          </select>
+        </label>
+        <label class="span-2">
           <span>结果评价</span>
           <input v-model="form.result" data-testid="field-result" type="text" placeholder="记录反差、灰雾与密度表现" />
         </label>
-        <div class="span-3 compensation-callout">
+        <div class="span-3 compensation-callout" :class="{ 'compensation-callout--active': form.applyCorrectionId }">
           <div>
-            <strong>温度补偿建议</strong>
+            <strong>温度补偿建议（即时折算）</strong>
             <p v-if="suggestion">{{ suggestion.advice }}；显影液用量会在保存后加一卷。</p>
             <p v-else>请选择一条配方后查看修正建议。</p>
           </div>
-          <button type="button" class="ghost-button" :disabled="!suggestion" @click="applySuggestion">采用修正时间</button>
+          <button type="button" class="ghost-button" :disabled="!suggestion" @click="applySuggestion">采用温度折算</button>
+        </div>
+        <div v-if="selectedDeveloper" class="span-3 compensation-callout correction-callout">
+          <div>
+            <strong>活性修正建议（本机重算）</strong>
+            <p v-if="batchBlocked">
+              工作液 {{ selectedDeveloper.batchNo }} 的配方基准两版尚未人工选定，本批暂不参与新建议。
+            </p>
+            <p v-else-if="pendingCorrection && correctionMinutes !== null">
+              控制条活性 {{ Math.round(pendingCorrection.basis.activity * 100) }}%，活性系数 ×{{ pendingCorrection.activityFactor }}；
+              按 {{ form.actualTempC }}°C 实冲建议 <strong>{{ correctionMinutes.toFixed(2) }} 分钟</strong>。
+              <em v-if="form.applyCorrectionId">已采用，保存时将冻结当时判定依据。</em>
+            </p>
+            <p v-else>该工作液暂无控制条活性读数，按手工校验处理，不补造活性数值。</p>
+          </div>
+          <button
+            v-if="pendingCorrection && correctionMinutes !== null && !batchBlocked"
+            type="button"
+            class="primary-button"
+            data-testid="apply-correction"
+            @click="applyCorrection"
+          >采用活性建议</button>
         </div>
       </div>
       <div class="form-actions">
@@ -261,8 +343,22 @@ onMounted(async () => {
             <span><small>实测温度</small><strong>{{ run.actualTempC }}°C</strong></span>
             <span><small>实际时间</small><strong>{{ run.actualMinutes }} 分钟</strong></span>
             <span><small>罐型</small><strong>{{ run.tankType }}</strong></span>
+            <span>
+              <small>数据校验</small>
+              <span
+                class="status-chip"
+                :class="run.verifiedBy === 'instrument' ? 'status--cyan' : 'status--amber'"
+                data-testid="run-verified"
+              >{{ run.verifiedBy === 'instrument' ? '仪器读数' : '手工校验' }}</span>
+            </span>
           </div>
           <blockquote>{{ run.result }}</blockquote>
+          <div v-if="run.basisSnapshot" class="basis-snapshot" data-testid="run-basis">
+            采纳时依据已冻结：活性 {{ Math.round(run.basisSnapshot.activity * 100) }}%
+            · 基准 {{ run.basisSnapshot.baselineTempC }}°C / {{ run.basisSnapshot.baselineMinutes }} 分钟
+            · 读数 #{{ run.basisSnapshot.readingId }}
+            <em v-if="run.basisSnapshot.conflictResolved">（人工选定基准）</em>
+          </div>
           <div class="run-card__foot">
             <small v-if="recipeForRun(run.recipeId)?.note">配方注释：{{ recipeForRun(run.recipeId)?.note }}</small>
             <button type="button" class="text-button" @click="writeBack(run.recipeId, run.id)">回写配方注释</button>

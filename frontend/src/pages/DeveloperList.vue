@@ -16,21 +16,30 @@ interface DeveloperForm {
   maxRolls: number
   usedRolls: number
   state: DeveloperState
+  batchNo: string
 }
 
 const developerStore = useDeveloperStore()
 const showForm = ref(false)
 const saving = ref(false)
+const todayIso = new Date().toISOString().slice(0, 10)
 const form = reactive<DeveloperForm>({
   name: '',
   category: 'D-76',
   dilution: '1:1',
   volumeMl: 1000,
-  mixedAt: new Date().toISOString().slice(0, 10),
+  mixedAt: todayIso,
   maxRolls: 12,
   usedRolls: 0,
-  state: '新配'
+  state: '新配',
+  batchNo: ''
 })
+
+function nextBatchNo(): string {
+  const stamp = todayIso.replace(/-/g, '').slice(2)
+  const serial = developerStore.developers.length + 1
+  return `WB-${stamp}-${String(serial).padStart(2, '0')}`
+}
 
 function stateTone(developer: Developer): 'cyan' | 'amber' | 'rose' {
   if (developer.state === '报废') return 'rose'
@@ -43,14 +52,21 @@ async function submitDeveloper(): Promise<void> {
     ElMessage.warning('请填写显影液名称与配制日期')
     return
   }
+  if (!form.batchNo.trim()) {
+    ElMessage.warning('请填写工作液批号，批号用于与冲洗机回传对账')
+    return
+  }
   saving.value = true
   try {
     await developerStore.addDeveloper({
       ...form,
       name: form.name.trim(),
+      batchNo: form.batchNo.trim(),
       volumeMl: Math.max(0, form.volumeMl),
       maxRolls: Math.max(1, form.maxRolls),
-      usedRolls: Math.max(0, form.usedRolls)
+      usedRolls: Math.max(0, form.usedRolls),
+      lastActivity: null,
+      lastActivityAt: null
     })
     ElMessage.success('显影液工作液已登记')
     form.name = ''
@@ -58,6 +74,7 @@ async function submitDeveloper(): Promise<void> {
     form.maxRolls = 12
     form.usedRolls = 0
     form.state = '新配'
+    form.batchNo = nextBatchNo()
     showForm.value = false
   } finally {
     saving.value = false
@@ -70,8 +87,9 @@ async function scrapDeveloper(id?: number): Promise<void> {
   ElMessage.success('该工作液已标记为报废')
 }
 
-onMounted(() => {
-  void developerStore.load()
+onMounted(async () => {
+  await developerStore.load()
+  form.batchNo = nextBatchNo()
 })
 </script>
 
@@ -122,6 +140,10 @@ onMounted(() => {
             <option value="在用">在用</option>
             <option value="报废">报废</option>
           </select>
+        </label>
+        <label class="span-2">
+          <span>工作液批号</span>
+          <input v-model="form.batchNo" data-testid="field-batchNo" type="text" placeholder="如 WB-261002-06，须与冲洗机回传一致" />
         </label>
         <div class="span-2">
           <DilutionInput
@@ -180,9 +202,17 @@ onMounted(() => {
             </button>
           </div>
           <dl class="data-pairs">
+            <div><dt>工作液批号</dt><dd data-testid="developer-batchNo">{{ developer.batchNo }}</dd></div>
             <div><dt>类型 / 稀释</dt><dd>{{ developer.category }} · {{ developer.dilution }}</dd></div>
             <div><dt>工作液容量</dt><dd>{{ developer.volumeMl }} mL</dd></div>
             <div><dt>配制日期</dt><dd>{{ developer.mixedAt }}</dd></div>
+            <div>
+              <dt>控制条活性</dt>
+              <dd v-if="developer.lastActivity !== null && developer.lastActivity !== undefined" data-testid="developer-activity">
+                {{ Math.round(developer.lastActivity * 100) }}%<small v-if="developer.lastActivityAt"> · {{ developer.lastActivityAt.slice(0, 10) }}</small>
+              </dd>
+              <dd v-else class="text-muted">暂无仪器读数（手工校验）</dd>
+            </div>
             <div><dt>所需浓缩液</dt><dd>{{ calculateStockVolume(developer.volumeMl, developer.dilution) }} mL</dd></div>
           </dl>
           <div class="life-meter">

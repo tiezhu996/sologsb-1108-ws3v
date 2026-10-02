@@ -983,6 +983,146 @@ td em {
   font-size: 11px;
 }
 
+.text-muted {
+  color: #9a8f80;
+}
+
+.callback-input {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(129, 102, 72, 0.3);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #3c3226;
+  background: #fbf7ef;
+}
+
+.callback-input:focus {
+  outline: none;
+  border-color: #b08348;
+  box-shadow: 0 0 0 3px rgba(176, 131, 72, 0.15);
+}
+
+.ingest-summary {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #7c6a52;
+}
+
+.conflict-panel {
+  border-color: rgba(176, 78, 72, 0.4);
+}
+
+.conflict-card {
+  border: 1px solid rgba(176, 78, 72, 0.25);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 14px;
+  background: #fdf8f3;
+}
+
+.conflict-card header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.conflict-card header strong {
+  font-size: 14px;
+}
+
+.conflict-card header span {
+  color: #817466;
+  font-size: 12px;
+}
+
+.conflict-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 14px 0;
+}
+
+.conflict-side {
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(129, 102, 72, 0.35);
+}
+
+.conflict-side--machine {
+  background: rgba(64, 132, 158, 0.07);
+}
+
+.conflict-side--local {
+  background: rgba(176, 131, 72, 0.08);
+}
+
+.conflict-side h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #7c6a52;
+}
+
+.conflict-side p {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.conflict-side small {
+  color: #9a8f80;
+}
+
+.conflict-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.state-hint {
+  display: block;
+  margin-top: 4px;
+  color: #9a8f80;
+  max-width: 260px;
+}
+
+.block-flag {
+  display: inline-block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 11px;
+  color: #b04e48;
+}
+
+.basis-snapshot {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-left: 3px solid #40849e;
+  border-radius: 0 8px 8px 0;
+  background: rgba(64, 132, 158, 0.08);
+  font-size: 12px;
+  color: #4a5d66;
+}
+
+.basis-snapshot em {
+  color: #b08348;
+  font-style: normal;
+}
+
+.correction-callout {
+  background: rgba(176, 131, 72, 0.08);
+}
+
+.compensation-callout--active {
+  outline: 2px solid rgba(64, 132, 158, 0.45);
+}
+
 .footer {
   display: flex;
   justify-content: space-between;

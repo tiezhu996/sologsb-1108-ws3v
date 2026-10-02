@@ -12,5 +12,11 @@ export interface Developer {
   maxRolls: number
   usedRolls: number
   state: DeveloperState
+  /** 工作液批号，与冲洗机回传对账的业务键 */
+  batchNo: string
+  /** 最近一次控制条活性事实（无仪器读数时为空，不补造数值） */
+  lastActivity?: number | null
+  /** 最近一次活性更新时间 */
+  lastActivityAt?: string | null
   schemaRev?: number
 }
