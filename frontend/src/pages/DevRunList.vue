@@ -8,6 +8,7 @@ import PushPullTag from '../components/common/PushPullTag.vue'
 import { useTempCompensate } from '../hooks/useTempCompensate'
 import { useDeveloperStore } from '../stores/developerStore'
 import { useFilmStore } from '../stores/filmStore'
+import { useMachineStore } from '../stores/machineStore'
 import { useRecipeStore } from '../stores/recipeStore'
 import { useRunStore } from '../stores/runStore'
 import type { TankType } from '../types/dev-run'
@@ -30,6 +31,7 @@ interface RunForm {
 const route = useRoute()
 const filmStore = useFilmStore()
 const developerStore = useDeveloperStore()
+const machineStore = useMachineStore()
 const recipeStore = useRecipeStore()
 const runStore = useRunStore()
 const showForm = ref(false)
@@ -60,6 +62,10 @@ const form = reactive<RunForm>({
 })
 
 const selectedRecipe = computed(() => recipeStore.recipes.find((recipe) => recipe.id === form.recipeId))
+const selectedDeveloperPending = computed(() => {
+  const developerId = selectedRecipe.value?.developerId
+  return developerId !== undefined && machineStore.pendingConflictDeveloperIds.has(developerId)
+})
 const referenceTemp = computed(() => selectedRecipe.value?.tempC ?? 20)
 const { suggest } = useTempCompensate(referenceTemp)
 const suggestion = computed(() => {
@@ -99,6 +105,11 @@ function recipeLabel(id: number): string {
 
 function recipeForRun(id: number) {
   return recipeStore.recipes.find((item) => item.id === id)
+}
+
+function readingForRun(readingId?: number) {
+  if (readingId === undefined) return undefined
+  return machineStore.readings.find((item) => item.id === readingId)
 }
 
 function applySuggestion(): void {
@@ -148,7 +159,7 @@ async function writeBack(recipeId?: number, runId?: number): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([filmStore.load(), developerStore.load(), recipeStore.load(), runStore.load()])
+  await Promise.all([filmStore.load(), developerStore.load(), recipeStore.load(), runStore.load(), machineStore.load()])
   if (recipeStore.recipes[0]?.id !== undefined) {
     form.recipeId = recipeStore.recipes[0].id
   }
@@ -217,6 +228,7 @@ onMounted(async () => {
             <strong>温度补偿建议</strong>
             <p v-if="suggestion">{{ suggestion.advice }}；显影液用量会在保存后加一卷。</p>
             <p v-else>请选择一条配方后查看修正建议。</p>
+            <p v-if="selectedDeveloperPending" class="callout-warning">该配方所用工作液的配方基准正待人工选定，选定前冲洗机回传不参与新建议。</p>
           </div>
           <button type="button" class="ghost-button" :disabled="!suggestion" @click="applySuggestion">采用修正时间</button>
         </div>
@@ -261,6 +273,14 @@ onMounted(async () => {
             <span><small>实测温度</small><strong>{{ run.actualTempC }}°C</strong></span>
             <span><small>实际时间</small><strong>{{ run.actualMinutes }} 分钟</strong></span>
             <span><small>罐型</small><strong>{{ run.tankType }}</strong></span>
+            <span>
+              <small>读数来源</small>
+              <strong>{{ run.readingSource === 'machine' ? '冲洗机读数' : '手工校验' }}</strong>
+            </span>
+            <span v-if="readingForRun(run.readingId)">
+              <small>回传活性</small>
+              <strong>{{ readingForRun(run.readingId)?.activity.toFixed(2) }}</strong>
+            </span>
           </div>
           <blockquote>{{ run.result }}</blockquote>
           <div class="run-card__foot">

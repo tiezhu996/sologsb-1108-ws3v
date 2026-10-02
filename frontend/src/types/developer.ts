@@ -5,6 +5,7 @@ export type DeveloperState = '新配' | '在用' | '报废'
 export interface Developer {
   id?: number
   name: string
+  batchNo: string
   category: DeveloperCategory
   dilution: Dilution
   volumeMl: number

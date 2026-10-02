@@ -29,10 +29,14 @@ export const useDeveloperStore = defineStore('developer', {
       }
     },
     async addDeveloper(payload: NewDeveloper): Promise<number> {
-      const next = { ...payload, schemaRev: 2 }
+      const next = { ...payload, schemaRev: 3 }
       const id = await db.developers.add(plain(next))
       await this.load()
       return id
+    },
+    async setBatchNo(id: number, batchNo: string): Promise<void> {
+      await db.developers.update(id, plain({ batchNo: batchNo.trim() }))
+      await this.load()
     },
     async incrementUsed(id: number): Promise<void> {
       const developer = await db.developers.get(id)

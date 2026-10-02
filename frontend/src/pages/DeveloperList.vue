@@ -4,11 +4,13 @@ import { ElMessage } from 'element-plus'
 import DilutionInput from '../components/common/DilutionInput.vue'
 import StatBadge from '../components/common/StatBadge.vue'
 import { useDeveloperStore } from '../stores/developerStore'
+import { useMachineStore } from '../stores/machineStore'
 import type { Developer, DeveloperCategory, DeveloperState, Dilution } from '../types/developer'
 import { calculateStockVolume, remainingRolls } from '../utils/ratio'
 
 interface DeveloperForm {
   name: string
+  batchNo: string
   category: DeveloperCategory
   dilution: Dilution
   volumeMl: number
@@ -19,10 +21,13 @@ interface DeveloperForm {
 }
 
 const developerStore = useDeveloperStore()
+const machineStore = useMachineStore()
 const showForm = ref(false)
 const saving = ref(false)
+const batchDrafts = reactive<Record<number, string>>({})
 const form = reactive<DeveloperForm>({
   name: '',
+  batchNo: '',
   category: 'D-76',
   dilution: '1:1',
   volumeMl: 1000,
@@ -38,6 +43,10 @@ function stateTone(developer: Developer): 'cyan' | 'amber' | 'rose' {
   return 'amber'
 }
 
+function isBaselinePending(id?: number): boolean {
+  return id !== undefined && machineStore.pendingConflictDeveloperIds.has(id)
+}
+
 async function submitDeveloper(): Promise<void> {
   if (!form.name.trim() || !form.mixedAt) {
     ElMessage.warning('请填写显影液名称与配制日期')
@@ -48,12 +57,14 @@ async function submitDeveloper(): Promise<void> {
     await developerStore.addDeveloper({
       ...form,
       name: form.name.trim(),
+      batchNo: form.batchNo.trim(),
       volumeMl: Math.max(0, form.volumeMl),
       maxRolls: Math.max(1, form.maxRolls),
       usedRolls: Math.max(0, form.usedRolls)
     })
     ElMessage.success('显影液工作液已登记')
     form.name = ''
+    form.batchNo = ''
     form.mixedAt = new Date().toISOString().slice(0, 10)
     form.maxRolls = 12
     form.usedRolls = 0
@@ -64,6 +75,18 @@ async function submitDeveloper(): Promise<void> {
   }
 }
 
+async function saveBatchNo(id?: number): Promise<void> {
+  if (id === undefined) return
+  const batchNo = (batchDrafts[id] ?? '').trim()
+  if (!batchNo) {
+    ElMessage.warning('请填写要补登的工作液批号')
+    return
+  }
+  await developerStore.setBatchNo(id, batchNo)
+  delete batchDrafts[id]
+  ElMessage.success('工作液批号已补登，后续回传可按批号对账')
+}
+
 async function scrapDeveloper(id?: number): Promise<void> {
   if (id === undefined) return
   await developerStore.scrap(id)
@@ -71,7 +94,7 @@ async function scrapDeveloper(id?: number): Promise<void> {
 }
 
 onMounted(() => {
-  void developerStore.load()
+  void Promise.all([developerStore.load(), machineStore.load()])
 })
 </script>
 
@@ -105,6 +128,10 @@ onMounted(() => {
         <label>
           <span>名称</span>
           <input v-model="form.name" data-testid="field-name" type="text" placeholder="如 柯达 D-76 工作液 A" />
+        </label>
+        <label>
+          <span>工作液批号</span>
+          <input v-model="form.batchNo" data-testid="field-batchNo" type="text" placeholder="回传对账用，如 D76-260912-A" />
         </label>
         <label>
           <span>类型</span>
@@ -168,6 +195,7 @@ onMounted(() => {
           <div class="entity-card__title">
             <div>
               <span class="status-chip" :class="`status--${stateTone(developer)}`">{{ developer.state }}</span>
+              <span v-if="isBaselinePending(developer.id)" class="status-chip status--warning">基准待定</span>
               <h2>{{ developer.name }}</h2>
             </div>
             <button
@@ -180,11 +208,24 @@ onMounted(() => {
             </button>
           </div>
           <dl class="data-pairs">
+            <div><dt>工作液批号</dt><dd>{{ developer.batchNo || '未登记' }}</dd></div>
             <div><dt>类型 / 稀释</dt><dd>{{ developer.category }} · {{ developer.dilution }}</dd></div>
             <div><dt>工作液容量</dt><dd>{{ developer.volumeMl }} mL</dd></div>
             <div><dt>配制日期</dt><dd>{{ developer.mixedAt }}</dd></div>
             <div><dt>所需浓缩液</dt><dd>{{ calculateStockVolume(developer.volumeMl, developer.dilution) }} mL</dd></div>
           </dl>
+          <div v-if="!developer.batchNo" class="batchno-patch">
+            <input
+              v-model="batchDrafts[developer.id ?? 0]"
+              data-testid="field-batchNo-patch"
+              type="text"
+              placeholder="补登批号以对账冲洗机回传"
+            />
+            <button type="button" class="text-button" @click="saveBatchNo(developer.id)">补登批号</button>
+          </div>
+          <p v-if="isBaselinePending(developer.id)" class="baseline-pending-hint">
+            配方基准两版待人工选定，选定前该工作液不参与新建议。
+          </p>
           <div class="life-meter">
             <div class="life-meter__head">
               <span>剩余 {{ remainingRolls(developer.maxRolls, developer.usedRolls) }} 卷</span>

@@ -24,7 +24,7 @@ export const useRunStore = defineStore('run', {
       }
     },
     async addRun(payload: NewRun): Promise<number> {
-      const next = { ...payload, schemaRev: 2 }
+      const next = { ...payload, readingSource: 'manual' as const, schemaRev: 3 }
       const id = await db.runs.add(plain(next))
       const recipe = await db.recipes.get(payload.recipeId)
       if (recipe) {

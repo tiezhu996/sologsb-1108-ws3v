@@ -983,6 +983,151 @@ td em {
   font-size: 11px;
 }
 
+.callout-warning {
+  color: #8a5a1d !important;
+  font-weight: 600;
+}
+
+.conflict-card {
+  display: grid;
+  gap: 13px;
+  margin-top: 13px;
+  padding: 15px 17px;
+  border: 1px solid #e3c98f;
+  border-radius: 14px;
+  background: #fdf6e7;
+}
+
+.conflict-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.conflict-card__head small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.conflict-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.conflict-side {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.conflict-side--machine {
+  border-color: #b9cfd2;
+  background: #f0f7f6;
+}
+
+.conflict-side__tag {
+  color: var(--ink-soft);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.conflict-side strong {
+  font-size: 15px;
+}
+
+.conflict-side small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.conflict-card__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.advice-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 13px;
+}
+
+.advice-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 17px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.95);
+}
+
+.advice-card--closed {
+  opacity: 0.72;
+  background: #f6f0e4;
+}
+
+.advice-card__main {
+  display: grid;
+  gap: 6px;
+}
+
+.advice-card__minutes {
+  color: var(--accent-deep);
+  font-size: 19px;
+}
+
+.advice-card__recipe {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.advice-card__basis {
+  color: #5f5044;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.advice-card__foot {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.advice-card__foot small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.batchno-patch {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 11px;
+}
+
+.batchno-patch input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 9px;
+  background: #fbf7ef;
+  font-size: 12px;
+}
+
+.baseline-pending-hint {
+  margin: 9px 0 0;
+  color: #8a5a1d;
+  font-size: 11px;
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
@@ -1092,6 +1237,10 @@ td em {
 
   .run-card {
     grid-template-columns: 68px 1fr;
+  }
+
+  .conflict-compare {
+    grid-template-columns: 1fr;
   }
 
   .run-card__date strong {
